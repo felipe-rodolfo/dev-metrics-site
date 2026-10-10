@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>dev-metrics</title>
+<meta name="description" content="Local CLI that generates Jira, GitHub and GitLab metrics reports for your performance review.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  /* layout: single-column dark scroll, max-width 1080px container, alternating full-bleed sections with hairline borders */
+  :root{
+    --bg:#09080f;
+    --surface:#141020;
+    --surface-2:#1a1528;
+    --border:rgba(151,124,255,0.16);
+    --fg:#ece8f6;
+    --muted:#9791ac;
+    --accent:#9b7cf7;
+    --accent-dim:rgba(155,124,247,0.14);
+    --pop:#bfe681;
+    --pop-fg:#14210a;
+    --display: 'Sora', system-ui, sans-serif;
+    --body: 'Inter', system-ui, sans-serif;
+    --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
+    color-scheme: dark;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--bg);
+    color:var(--fg);
+    font-family:var(--body);
+    line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  img{max-width:100%}
+  h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0}
+  p{margin:0}
+  a{color:inherit}
+  .wrap{max-width:1080px;margin:0 auto;padding-inline:24px}
+  section{border-top:1px solid var(--border)}
+  section.flush{border-top:none}
+  .eyebrow{
+    font-family:var(--mono);
+    font-size:12px;
+    letter-spacing:.12em;
+    text-transform:uppercase;
+    color:var(--accent);
+    display:flex;align-items:center;gap:8px;
+    margin-bottom:16px;
+  }
+  .eyebrow::before{content:"//";color:var(--muted)}
+  .btn{
+    font-family:var(--body);
+    font-weight:600;
+    font-size:15px;
+    border-radius:999px;
+    padding:14px 26px;
+    border:1px solid transparent;
+    cursor:pointer;
+    display:inline-flex;align-items:center;gap:8px;
+    text-decoration:none;
+  }
+  .btn-pop{background:var(--pop);color:var(--pop-fg)}
+  .btn-ghost{background:transparent;color:var(--fg);border-color:var(--border)}
+  .btn:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+  /* ---- header ---- */
+  header{
+    position:sticky;top:env(safe-area-inset-top,0px);z-index:20;
+    background:rgba(9,8,15,0.82);backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--border);
+  }
+  header .wrap{display:flex;align-items:center;justify-content:space-between;padding-block:16px}
+  .logo{font-family:var(--mono);font-weight:600;font-size:15px;letter-spacing:.02em;display:flex;align-items:center;gap:8px}
+  .logo .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}
+  nav{display:flex;gap:22px;font-family:var(--mono);font-size:13px;color:var(--muted)}
+  nav a:hover{color:var(--fg)}
+  @media (max-width:560px){ nav a.hide-sm{display:none} }
+
+  /* ---- hero ---- */
+  .hero{padding-block:72px 56px}
+  .hero h1{font-size:clamp(32px,5.2vw,52px);font-weight:800;line-height:1.12;max-width:16ch}
+  .hero h1 .pop{color:var(--accent)}
+  .hero p.lede{margin-top:22px;max-width:56ch;color:var(--muted);font-size:17px}
+  .stat-row{display:flex;flex-wrap:wrap;gap:10px;margin-top:28px;font-family:var(--mono);font-size:13px;color:var(--muted)}
+  .stat-row span{display:flex;align-items:center;gap:8px}
+  .stat-row b{color:var(--fg);font-weight:600}
+  .stat-row .sep{color:var(--border)}
+
+  .term{
+    margin-top:32px;max-width:640px;
+    background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;
+  }
+  .term-bar{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-bottom:1px solid var(--border)}
+  .term-dots{display:flex;gap:6px}
+  .term-dots i{width:9px;height:9px;border-radius:50%;display:block}
+  .term-dots i:nth-child(1){background:var(--muted)}
+  .term-dots i:nth-child(2){background:var(--accent-dim);border:1px solid var(--accent)}
+  .term-dots i:nth-child(3){background:var(--pop)}
+  .copy-btn{
+    font-family:var(--mono);font-size:12px;color:var(--muted);background:transparent;border:1px solid var(--border);
+    border-radius:6px;padding:4px 10px;cursor:pointer;
+  }
+  .copy-btn:hover{color:var(--fg);border-color:var(--accent)}
+  .term pre{
+    margin:0;padding:18px 16px;font-family:var(--mono);font-size:13.5px;color:var(--fg);overflow-x:auto;
+  }
+  .term pre .muted{color:var(--muted)}
+  .term pre .pop{color:var(--pop)}
+  .term-caption{padding:0 16px 16px;font-family:var(--mono);font-size:12px;color:var(--muted)}
+
+  /* ---- sources bar ---- */
+  .sources{padding-block:48px}
+  .sources h2{font-size:22px;font-weight:700;margin-bottom:28px}
+  .source-row{display:flex;flex-wrap:wrap;gap:14px}
+  .source-chip{
+    font-family:var(--mono);font-size:14px;font-weight:500;
+    border:1px solid var(--border);border-radius:10px;padding:14px 20px;
+    display:flex;align-items:center;gap:10px;color:var(--fg);background:var(--surface);
+    flex:1;min-width:160px;
+  }
+  .source-chip svg{color:var(--accent);flex:none}
+
+  /* ---- myths accordion ---- */
+  .myths{padding-block:72px}
+  .myths h2{font-size:clamp(26px,3.6vw,38px);font-weight:700;max-width:18ch;margin-bottom:36px}
+  .myth{
+    border:1px solid var(--border);border-radius:14px;background:var(--surface);
+    margin-bottom:14px;overflow:hidden;
+  }
+  .myth-head{
+    display:flex;align-items:center;gap:18px;width:100%;background:none;border:none;color:inherit;
+    text-align:left;padding:20px;cursor:pointer;font-family:var(--body);
+  }
+  .myth-num{font-family:var(--display);font-weight:800;font-size:22px;color:var(--accent-dim);min-width:36px}
+  .myth-head span.q{font-size:17px;font-weight:600;flex:1;min-width:0}
+  .myth-head .chev{flex:none;color:var(--muted);transition:transform .2s ease}
+  .myth[data-open="true"] .chev{transform:rotate(180deg)}
+  .myth[data-open="true"] .myth-num{color:var(--accent)}
+  .myth-body{padding:0 20px 22px 74px;color:var(--muted);font-size:15px;max-width:62ch}
+  .myth-body b{color:var(--fg)}
+
+  /* ---- how it works ---- */
+  .how{padding-block:72px}
+  .how h2{font-size:clamp(26px,3.6vw,38px);font-weight:700;max-width:20ch;margin-bottom:36px}
+  .how-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
+  @media (max-width:760px){.how-grid{grid-template-columns:1fr}}
+  .how-card{border:1px solid var(--border);border-radius:14px;background:var(--surface);padding:26px}
+  .how-card .icon-box{
+    width:40px;height:40px;border-radius:10px;border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;color:var(--accent);margin-bottom:18px;
+  }
+  .how-card .n{font-family:var(--display);font-weight:800;font-size:26px;color:var(--fg);margin-bottom:6px}
+  .how-card h3{font-size:17px;font-weight:600;margin-bottom:8px}
+  .how-card p{color:var(--muted);font-size:14.5px}
+
+  /* ---- metrics stacked list ---- */
+  .metrics{padding-block:72px}
+  .metrics h2{font-size:clamp(26px,3.6vw,38px);font-weight:700;max-width:20ch;margin-bottom:10px}
+  .metrics p.intro{color:var(--muted);max-width:60ch;margin-bottom:32px}
+  .metric-list{border:1px solid var(--border);border-radius:16px;overflow:hidden;background:var(--surface)}
+  .metric-row{
+    display:grid;grid-template-columns:auto 120px 1fr;gap:20px;align-items:center;
+    padding:22px 24px;border-bottom:1px solid var(--border);
+  }
+  .metric-row:last-child{border-bottom:none}
+  .metric-row[data-pop="true"]{background:var(--accent-dim)}
+  .metric-icon{
+    width:36px;height:36px;border-radius:9px;border:1px solid var(--border);
+    display:flex;align-items:center;justify-content:center;color:var(--accent);
+  }
+  .metric-row[data-pop="true"] .metric-icon{color:var(--pop);border-color:var(--pop)}
+  .metric-tag{font-family:var(--mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+  .metric-body h3{font-size:16.5px;font-weight:600;margin-bottom:4px}
+  .metric-row[data-pop="true"] h3{color:var(--pop)}
+  .metric-body p{color:var(--muted);font-size:14.5px}
+  @media (max-width:640px){
+    .metric-row{grid-template-columns:auto 1fr;}
+    .metric-tag{grid-column:2}
+    .metric-body{grid-column:1/-1}
+  }
+
+  /* ---- report preview ---- */
+  .preview{padding-block:72px}
+  .preview h2{font-size:clamp(26px,3.6vw,38px);font-weight:700;max-width:20ch;margin-bottom:14px}
+  .preview p.intro{color:var(--muted);max-width:60ch;margin-bottom:28px}
+  .preview .term{max-width:none}
+  .preview pre{white-space:pre-wrap}
+  .preview .h1line{color:var(--fg);font-weight:600}
+  .preview .h2line{color:var(--accent)}
+  .preview .ok{color:var(--pop)}
+
+  /* ---- security ---- */
+  .security{padding-block:72px}
+  .sec-grid{display:grid;grid-template-columns:1fr 1fr;gap:48px;align-items:start}
+  @media (max-width:800px){.sec-grid{grid-template-columns:1fr}}
+  .security h2{font-size:clamp(26px,3.6vw,38px);font-weight:700;line-height:1.2}
+  .security h2 .pop{color:var(--accent)}
+  .sec-list{margin-top:26px;display:flex;flex-direction:column;gap:18px}
+  .sec-item{display:flex;gap:14px}
+  .sec-item .check{flex:none;color:var(--pop);margin-top:2px}
+  .sec-item p{color:var(--muted);font-size:15px}
+  .sec-item b{color:var(--fg)}
+  .env-box{
+    background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:22px;
+    font-family:var(--mono);font-size:13.5px;color:var(--muted);
+  }
+  .env-box .k{color:var(--accent)}
+  .env-box .v{color:var(--fg)}
+  .env-box .masked{letter-spacing:.14em}
+
+  /* ---- install / final cta ---- */
+  .install{padding-block:80px;text-align:center}
+  .install h2{font-size:clamp(28px,4.4vw,42px);font-weight:800;max-width:20ch;margin:0 auto 16px}
+  .install p.intro{color:var(--muted);max-width:52ch;margin:0 auto 36px}
+  .install .term{margin-inline:auto;text-align:left}
+  .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;margin-top:32px}
+  .fine{margin-top:20px;font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+
+  footer{padding-block:32px;border-top:1px solid var(--border)}
+  footer .wrap{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+  footer .f-links{display:flex;gap:18px;font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+  footer .f-links a:hover{color:var(--fg)}
+  footer .copy{font-family:var(--mono);font-size:12.5px;color:var(--muted)}
+
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <div class="logo"><span class="dot"></span>dev-metrics</div>
+    <nav>
+      <a class="hide-sm" href="https://github.com/felipe-rodolfo/dev-metrics" target="_blank" rel="noopener">GitHub</a>
+      <a class="hide-sm" href="https://www.npmjs.com/package/@feliperold/dev-metrics" target="_blank" rel="noopener">npm</a>
+      <a href="#install">Install</a>
+      <a href="../" hreflang="pt-BR">PT</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero flush">
+    <div class="wrap">
+      <p class="eyebrow">Local CLI · Jira + GitHub + GitLab</p>
+      <h1>Your performance review deserves <span class="pop">data, not guesswork</span>.</h1>
+      <p class="lede">dev-metrics runs on your machine and generates a report of your Jira deliveries and your GitHub and GitLab code activity, over a date range. You use your own tokens — nothing leaves your computer.</p>
+      <div class="stat-row">
+        <span><b>3</b> data sources</span><span class="sep">·</span>
+        <span><b>100%</b> local</span><span class="sep">·</span>
+        <span><b>MIT</b> license</span>
+      </div>
+      <div class="term">
+        <div class="term-bar">
+          <div class="term-dots"><i></i><i></i><i></i></div>
+          <button class="copy-btn" data-copy="npx @feliperold/dev-metrics --from 2026-01-01 --to 2026-06-30" data-label="Copy">Copy</button>
+        </div>
+        <pre><span class="muted">$</span> npx <span class="pop">@feliperold/dev-metrics</span> --from 2026-01-01 --to 2026-06-30</pre>
+      </div>
+      <p class="term-caption">No install required. The report lands in <code>./reports</code>, in Markdown and Excel.</p>
+    </div>
+  </section>
+
+  <section class="sources">
+    <div class="wrap">
+      <p class="eyebrow">Data sources</p>
+      <h2>One tool, three systems</h2>
+      <div class="source-row">
+        <div class="source-chip">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M11.5 2 3 10.3a1.9 1.9 0 0 0 0 2.7l8.5 8.3a1.9 1.9 0 0 0 2.7 0l1.4-1.4-6.4-6.3a2.6 2.6 0 0 1 0-3.7L14.6 5l-1.4-1.4a1.9 1.9 0 0 0-2.7-.1Z"/><path d="m14.6 5 4.5 4.4a1.9 1.9 0 0 1 0 2.7L14.6 17"/></svg>
+          Jira · deliveries
+        </div>
+        <div class="source-chip">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.5 2 2 6.6 2 12.3c0 4.5 2.9 8.4 6.8 9.7.5.1.7-.2.7-.5v-1.8c-2.8.6-3.4-1.4-3.4-1.4-.4-1.2-1-1.5-1-1.5-.9-.6.1-.6.1-.6 1 .1 1.5 1 1.5 1 .9 1.6 2.3 1.1 2.9.9.1-.7.4-1.1.6-1.4-2.2-.3-4.6-1.1-4.6-5 0-1.1.4-2 1-2.7-.1-.3-.5-1.4.1-2.8 0 0 .8-.3 2.8 1a9.4 9.4 0 0 1 5 0c1.9-1.3 2.8-1 2.8-1 .6 1.4.2 2.5.1 2.8.6.7 1 1.6 1 2.7 0 3.9-2.3 4.7-4.6 5 .4.3.7 1 .7 2v2.9c0 .3.2.6.7.5A10.3 10.3 0 0 0 22 12.3C22 6.6 17.5 2 12 2Z"/></svg>
+          GitHub · activity
+        </div>
+        <div class="source-chip">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m12 21 4.2-4.4H7.8L12 21Z"/><path d="M12 21 4.5 9.8h15L12 21Z"/><path d="m4.5 9.8 1.9-6c.1-.5.7-.5.9 0l1.8 6"/><path d="m16.9 9.8 1.9-6c.1-.5.7-.5.9 0l1.8 6"/></svg>
+          GitLab · activity
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="myths">
+    <div class="wrap">
+      <p class="eyebrow">Before you run it</p>
+      <h2>3 wrong ideas about this review.</h2>
+
+      <div class="myth" data-open="true">
+        <button class="myth-head" data-toggle>
+          <span class="myth-num">01</span>
+          <span class="q">"I remember exactly what I shipped."</span>
+          <svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="myth-body">
+          <p>Six months is too long to rely on memory. Between shipping features, reviewing PRs, and firefighting, it's easy to forget half of what you did. The report pulls data straight from the source — by each issue's resolution date and each PR/MR's merge date — <b>not from your recollection</b>.</p>
+        </div>
+      </div>
+
+      <div class="myth">
+        <button class="myth-head" data-toggle>
+          <span class="myth-num">02</span>
+          <span class="q">"A single number tells the whole story."</span>
+          <svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="myth-body" hidden>
+          <p>"10 PRs merged" doesn't say whether that was 10 small tweaks or 2 huge PRs counted alongside rework. That's why the report always returns the number <b>with context</b>: issues by type, story points with average and median, median PR size in lines and changed files. An isolated metric is easy to misread.</p>
+        </div>
+      </div>
+
+      <div class="myth">
+        <button class="myth-head" data-toggle>
+          <span class="myth-num">03</span>
+          <span class="q">"I need a team tool with centralized data."</span>
+          <svg class="chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+        <div class="myth-body" hidden>
+          <p>You don't. Each person runs the CLI for themselves, with their own tokens, and only looks at data they already have access to. <b>No data passes through a central server</b> — the report is generated and stays on your machine, in <code>reports/</code>, outside version control.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="how">
+    <div class="wrap">
+      <p class="eyebrow">From token to report</p>
+      <h2>Three steps, no manual spreadsheet.</h2>
+      <div class="how-grid">
+        <div class="how-card">
+          <div class="icon-box">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="15" r="4"/><path d="M11 12 20 3M16 5l3 3M18 7l2 2"/></svg>
+          </div>
+          <div class="n">01</div>
+          <h3>Set up the tokens</h3>
+          <p>A <code>.env</code> with your Jira, GitHub and/or GitLab credentials. Jira is required; at least one of the other two is too.</p>
+        </div>
+        <div class="how-card">
+          <div class="icon-box">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="m5 7 5 5-5 5"/><path d="M13 17h6"/></svg>
+          </div>
+          <div class="n">02</div>
+          <h3>Run the command</h3>
+          <p><code>dev-metrics --from &lt;date&gt; --to &lt;date&gt;</code>. Both dates are inclusive, and each event is counted by its UTC date.</p>
+        </div>
+        <div class="how-card">
+          <div class="icon-box">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 3h7l4 4v14H7Z"/><path d="M14 3v4h4"/><path d="M9 13h6M9 17h6"/></svg>
+          </div>
+          <div class="n">03</div>
+          <h3>Read the report</h3>
+          <p>Markdown with the numbers in context, plus an <code>.xlsx</code> with one tab per source, ready to bring to your review meeting.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="metrics">
+    <div class="wrap">
+      <p class="eyebrow">What goes into the report</p>
+      <h2>Metrics covered.</h2>
+      <p class="intro">Each source has its own section, calculated only from its own data. If a source fails, its section is flagged as incomplete — the rest of the report still goes through.</p>
+      <div class="metric-list">
+        <div class="metric-row">
+          <div class="metric-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m9 12 2 2 4-4"/><circle cx="12" cy="12" r="9"/></svg>
+          </div>
+          <div class="metric-tag">Jira</div>
+          <div class="metric-body">
+            <h3>Deliveries by type</h3>
+            <p>Issues completed in the period, grouped by type, plus average and median story points — "no data" when nobody has an estimate.</p>
+          </div>
+        </div>
+        <div class="metric-row">
+          <div class="metric-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="6" cy="6" r="2.4"/><circle cx="6" cy="18" r="2.4"/><circle cx="18" cy="9" r="2.4"/><path d="M6 8.4V15.6M8.2 7.2 15.8 9"/></svg>
+          </div>
+          <div class="metric-tag">GitHub / GitLab</div>
+          <div class="metric-body">
+            <h3>PRs and MRs</h3>
+            <p>Opened, merged, and closed without merge in the period — each platform with its own count, never mixed together.</p>
+          </div>
+        </div>
+        <div class="metric-row">
+          <div class="metric-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19V9M12 19V5M20 19v-7"/></svg>
+          </div>
+          <div class="metric-tag">Size</div>
+          <div class="metric-body">
+            <h3>Median lines and files</h3>
+            <p>Only for PRs/MRs merged in the period. Median, not average — one giant PR won't skew the result.</p>
+          </div>
+        </div>
+        <div class="metric-row" data-pop="true">
+          <div class="metric-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+          </div>
+          <div class="metric-tag">Speed</div>
+          <div class="metric-body">
+            <h3>Cycle time</h3>
+            <p>Hours between opening and merging each PR/MR, in average and median. It's code time, not Jira status time.</p>
+          </div>
+        </div>
+        <div class="metric-row">
+          <div class="metric-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20V10M12 10l6 3M12 10 6 13"/><path d="M12 4v3"/></svg>
+          </div>
+          <div class="metric-tag">Commits</div>
+          <div class="metric-body">
+            <h3>Commits in the period</h3>
+            <p>Only the authenticated user's own commits, dated within the chosen range.</p>
+          </div>
+        </div>
+        <div class="metric-row">
+          <div class="metric-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 9v4l-3 2"/><path d="M4.5 7 3 5M19.5 7 21 5"/><circle cx="12" cy="13" r="8"/></svg>
+          </div>
+          <div class="metric-tag">Reliability</div>
+          <div class="metric-body">
+            <h3>Partial failure, never silent</h3>
+            <p>If a source fails, the report still ships with that section flagged as incomplete and why — the CLI also exits with a non-zero error code.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="preview">
+    <div class="wrap">
+      <p class="eyebrow">Example output</p>
+      <h2>The report, in Markdown.</h2>
+      <p class="intro">The same content also ships as <code>.xlsx</code>, one tab per source. Illustrative example:</p>
+      <div class="term">
+        <div class="term-bar">
+          <div class="term-dots"><i></i><i></i><i></i></div>
+          <span style="font-family:var(--mono);font-size:12px;color:var(--muted)">reports/report-2026-01-01_2026-06-30.md</span>
+        </div>
+        <pre><span class="h1line"># Metrics report: 2026-01-01 to 2026-06-30</span>
+
+<span class="h2line">## Jira deliveries</span>
+<span class="muted">- Resolved issues: 14</span>
+<span class="muted">  - Story: 9</span>
+<span class="muted">  - Bug: 5</span>
+<span class="muted">- Average story points: 4.2</span>
+<span class="muted">- Median story points: 3</span>
+
+<span class="h2line">## Code activity: GitHub</span>
+<span class="muted">- Open PRs/MRs in period: 2</span>
+<span class="muted">- Merged PRs/MRs in period: 31</span>
+<span class="muted">- Closed without merge in period: 1</span>
+<span class="muted">- Median size in changed lines: 86</span>
+<span class="muted">- Median size in changed files: 4</span>
+<span class="muted">- Commits: 142</span>
+<span class="muted">- Average cycle time (hours): 18.4</span>
+<span class="muted">- Median cycle time (hours): 6.1</span>
+
+<span class="h2line">## Sources</span>
+<span class="ok">- Jira: ok</span>
+<span class="ok">- GitHub: ok</span>
+<span class="muted">- GitLab: incomplete (GITLAB_TOKEN not set)</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="security">
+    <div class="wrap sec-grid">
+      <div>
+        <p class="eyebrow">Security</p>
+        <h2>I run locally. <span class="pop">That's where your data comes from.</span></h2>
+        <div class="sec-list">
+          <div class="sec-item">
+            <svg class="check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 13 4 4L19 7"/></svg>
+            <p><b>Tokens only via environment variables.</b> They never show up in the report, the logs, or error messages.</p>
+          </div>
+          <div class="sec-item">
+            <svg class="check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 13 4 4L19 7"/></svg>
+            <p><b>Header, never URL.</b> Tokens travel in <code>Authorization</code> or <code>PRIVATE-TOKEN</code> — never in the query string.</p>
+          </div>
+          <div class="sec-item">
+            <svg class="check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 13 4 4L19 7"/></svg>
+            <p><b><code>reports/</code> stays out of git.</b> The report contains one person's review data, so it never goes into version control.</p>
+          </div>
+          <div class="sec-item">
+            <svg class="check" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m5 13 4 4L19 7"/></svg>
+            <p><b>Identity from the token itself.</b> The CLI figures out who you are via <code>/myself</code>, <code>/user</code> — it never cross-references identities across systems.</p>
+          </div>
+        </div>
+      </div>
+      <div class="env-box">
+        <div><span class="k">JIRA_BASE_URL</span>=<span class="v">https://your-company.atlassian.net</span></div>
+        <div><span class="k">JIRA_EMAIL</span>=<span class="v">you@company.com</span></div>
+        <div><span class="k">JIRA_API_TOKEN</span>=<span class="v masked">••••••••••••</span></div>
+        <div><span class="k">GITHUB_TOKEN</span>=<span class="v masked">••••••••••••</span></div>
+        <div><span class="k">GITLAB_TOKEN</span>=<span class="v masked">••••••••••••</span></div>
+        <div style="margin-top:14px;color:var(--muted);font-size:12.5px"># lives in .env, already ignored by .gitignore</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="install" id="install">
+    <div class="wrap">
+      <p class="eyebrow">Install</p>
+      <h2>The next step is running it on your own machine.</h2>
+      <p class="intro">Node 24 or higher. No account, no signup — just the tokens for the platforms you already use.</p>
+      <div class="term">
+        <div class="term-bar">
+          <div class="term-dots"><i></i><i></i><i></i></div>
+          <button class="copy-btn" data-copy="npm install -g @feliperold/dev-metrics" data-label="Copy">Copy</button>
+        </div>
+        <pre><span class="muted">$</span> npm install -g <span class="pop">@feliperold/dev-metrics</span>
+<span class="muted">$</span> dev-metrics --from 2026-01-01 --to 2026-06-30</pre>
+      </div>
+      <div class="cta-row">
+        <a class="btn btn-pop" href="https://github.com/felipe-rodolfo/dev-metrics" target="_blank" rel="noopener">View on GitHub →</a>
+        <a class="btn btn-ghost" href="https://www.npmjs.com/package/@feliperold/dev-metrics" target="_blank" rel="noopener">Package on npm</a>
+      </div>
+      <p class="fine">MIT license · report in .md and .xlsx · requires Node ≥ 24</p>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="logo"><span class="dot"></span>dev-metrics</div>
+    <div class="f-links">
+      <a href="https://github.com/felipe-rodolfo/dev-metrics" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://www.npmjs.com/package/@feliperold/dev-metrics" target="_blank" rel="noopener">npm</a>
+      <a href="https://github.com/felipe-rodolfo/dev-metrics/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+    </div>
+    <div class="copy">© 2026 · dev-metrics</div>
+  </div>
+</footer>
+
+<script>
+  document.querySelectorAll('[data-toggle]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var card = btn.closest('.myth');
+      var body = card.querySelector('.myth-body');
+      var open = card.getAttribute('data-open') === 'true';
+      card.setAttribute('data-open', String(!open));
+      body.hidden = open;
+    });
+  });
+
+  document.querySelectorAll('[data-copy]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var text = btn.getAttribute('data-copy');
+      var original = btn.getAttribute('data-label') || btn.textContent;
+      function done(){
+        btn.textContent = 'Copied!';
+        setTimeout(function(){ btn.textContent = original; }, 1500);
+      }
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(function(){
+          fallbackCopy(text); done();
+        });
+      } else {
+        fallbackCopy(text); done();
+      }
+    });
+  });
+
+  function fallbackCopy(text){
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try { document.execCommand('copy'); } catch(e) {}
+    document.body.removeChild(ta);
+  }
+</script>
+</body>
+</html>
